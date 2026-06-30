@@ -318,11 +318,15 @@ function Dashboard({stats, trend, scatter, fsKey, setFsKey}) {
   const theme = useTheme()
   const t = useI18n()
 
-  const trendTraces = useMemo(() => trend.length ? [{
-    x: trend.map(d => d.round_key), y: trend.map(d => num(d.best_score)),
-    type: 'scatter', mode: 'lines+markers',
-    line: {color: theme === 'dark' ? '#d4af37' : '#9a7b1f', width: 3}, marker: {size: 9}
-  }] : [], [trend, theme])
+  const trendTraces = useMemo(() => {
+    // 排除 R6 异常值（best_score=1.2944，尺度错误）
+    const filtered = trend.filter(d => d.round_key !== 'R6')
+    return filtered.length ? [{
+      x: filtered.map(d => d.round_key), y: filtered.map(d => num(d.best_score)),
+      type: 'scatter', mode: 'lines+markers',
+      line: {color: theme === 'dark' ? '#d4af37' : '#9a7b1f', width: 3}, marker: {size: 9}
+    }] : []
+  }, [trend, theme])
   const trendLayout = useMemo(() => {
     const l = plotLayout(t.bestByRound, theme)
     return {...l, yaxis: {...l.yaxis, title: t.axisScore}}
@@ -470,7 +474,19 @@ function ChartsPage({roundKey, fsKey, setFsKey}) {
   const [top, setTop] = useState([])
   const [graph, setGraph] = useState({nodes: [], edges: []})
 
-  useEffect(() => { get('/api/plots/score-scatter?limit=3000').then(setScatter) }, [])
+  useEffect(() => {
+    get('/api/plots/score-scatter?limit=10000').then(data => {
+      const byRound = {}
+      data.forEach(d => { (byRound[d.source_round] = byRound[d.source_round] || []).push(d) })
+      const sampled = []
+      Object.keys(byRound).sort().forEach(r => {
+        const arr = byRound[r]
+        const step = Math.max(1, Math.ceil(arr.length / 200))
+        for (let i = 0; i < arr.length; i += step) sampled.push(arr[i])
+      })
+      setScatter(sampled)
+    })
+  }, [])
   useEffect(() => { get(`/api/metrics/top?limit=50${roundKey ? '&round_key=' + roundKey : ''}`).then(setTop) }, [roundKey])
   useEffect(() => { get('/api/graph/lineage?min_score=0.94&limit=250').then(setGraph) }, [])
 
@@ -634,7 +650,19 @@ function App() {
     get('/api/stats').then(setStats)
     get('/api/rounds').then(setRounds)
     get('/api/plots/round-trend').then(setTrend)
-    get('/api/plots/score-scatter?limit=3000').then(setScatter)
+    get('/api/plots/score-scatter?limit=10000').then(data => {
+      // 每轮均匀采样，避免 R25 等大轮次占满配额
+      const byRound = {}
+      data.forEach(d => { (byRound[d.source_round] = byRound[d.source_round] || []).push(d) })
+      const sampled = []
+      Object.keys(byRound).sort().forEach(r => {
+        const arr = byRound[r]
+        // 每轮最多 200 条，均匀采样
+        const step = Math.max(1, Math.ceil(arr.length / 200))
+        for (let i = 0; i < arr.length; i += step) sampled.push(arr[i])
+      })
+      setScatter(sampled)
+    })
   }, [])
   useEffect(() => {
     const h = e => { if (e.key === 'Escape') setFsKey(null) }
