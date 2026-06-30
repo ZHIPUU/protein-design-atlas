@@ -140,7 +140,7 @@ function useThemeCss() {
 .topbar .tb-round{color:var(--gold);font-size:12px;letter-spacing:.1em}
 .topbar button{background:transparent;border:1px solid var(--line);border-radius:12px;padding:8px;color:var(--ink);cursor:pointer;display:flex;align-items:center}
 .topbar button:hover{border-color:var(--gold);color:var(--gold)}
-.chart-frame{background:var(--panel);border:1px solid var(--line);border-radius:18px;display:flex;flex-direction:column;padding:8px;min-height:420px}
+.chart-frame{background:var(--panel);border:1px solid var(--line);border-radius:18px;display:flex;flex-direction:column;padding:8px;min-height:520px}
 .chart-frame.fs{position:fixed;inset:0;z-index:9999;border-radius:0;padding:12px;min-height:0}
 .chart-head{display:flex;align-items:center;justify-content:space-between;padding:4px 8px 8px}
 .chart-head .t{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--gold);letter-spacing:.12em;text-transform:uppercase}
@@ -423,32 +423,77 @@ function NetworkPage({onSelect, fsKey, setFsKey}) {
 
   useEffect(() => {
     let cy
-    get('/api/graph/lineage?min_score=0.94&limit=250').then(g => {
+    let ro
+    get('/api/graph/lineage?min_score=0.85&limit=1000').then(g => {
       if (!ref.current) return
+      // 每轮均匀采样节点，避免 R25 占满
+      const nodesByRound = {}
+      ;(g.nodes || []).forEach(n => {
+        const r = n.data.source_round || n.data.label || 'other'
+        ;(nodesByRound[r] = nodesByRound[r] || []).push(n)
+      })
+      const sampledNodes = []
+      Object.keys(nodesByRound).forEach(r => {
+        const arr = nodesByRound[r]
+        // 每轮最多 40 个节点
+        const step = Math.max(1, Math.ceil(arr.length / 40))
+        for (let i = 0; i < arr.length; i += step) sampledNodes.push(arr[i])
+      })
+      const nodeIds = new Set(sampledNodes.map(n => n.data.id))
+      // 去重边 + 只保留两端节点都在的边
+      const seenEdges = new Set()
+      const edges = (g.edges || []).filter(e => {
+        const s = e.data.source, t = e.data.target
+        if (!nodeIds.has(s) || !nodeIds.has(t)) return false
+        const key = s + '->' + t
+        if (seenEdges.has(key)) return false
+        seenEdges.add(key)
+        return true
+      })
+      // 节点标签优化：序列 hash 节点显示 轮次+分数
+      const nodes = sampledNodes.map(n => ({
+        ...n,
+        data: {
+          ...n.data,
+          label: n.data.label && n.data.label.length === 16 && /^[0-9a-f]+$/.test(n.data.label)
+            ? `${n.data.source_round || ''} ${n.data.best_score ? Number(n.data.best_score).toFixed(4) : ''}`
+            : n.data.label
+        }
+      }))
       cy = cytoscape({
         container: ref.current,
-        elements: [...(g.nodes || []), ...(g.edges || [])],
-        layout: {name: 'fcose', animate: false},
+        elements: [...nodes, ...edges],
+        layout: {name: 'fcose', animate: false, nodeSeparation: 80, idealEdgeLength: 120},
         style: [
           {selector: 'node', style: {
-            'background-color': `mapData(best_score,0.93,0.946,${theme === 'dark' ? '#315b7c' : '#7aa8d8'},${theme === 'dark' ? '#e0b84a' : '#9a7b1f'})`,
+            'background-color': `mapData(best_score,0.93,0.948,${theme === 'dark' ? '#315b7c' : '#7aa8d8'},${theme === 'dark' ? '#e0b84a' : '#9a7b1f'})`,
             'label': 'data(label)', 'color': theme === 'dark' ? '#eee' : '#333', 'font-size': 8,
-            'width': 'mapData(best_score,0.93,0.946,18,52)', 'height': 'mapData(best_score,0.93,0.946,18,52)', 'text-wrap': 'wrap'
+            'width': 'mapData(best_score,0.93,0.948,20,48)', 'height': 'mapData(best_score,0.93,0.948,20,48)', 'text-wrap': 'wrap', 'text-valign': 'bottom', 'text-margin-y': 4
           }},
           {selector: 'edge', style: {
             'line-color': theme === 'dark' ? '#53645f' : '#c8c0ac',
-            'target-arrow-color': theme === 'dark' ? '#53645f' : '#c8c0ac',
-            'target-arrow-shape': 'triangle', 'curve-style': 'bezier', 'opacity': 0.45
+            'target-arrow-color': theme === 'dark' ? '#8aa39b' : '#999',
+            'target-arrow-shape': 'triangle', 'curve-style': 'bezier', 'opacity': 0.5,
+            'arrow-scale': 1.2, 'width': 1.5
           }}
         ]
       })
       cy.on('tap', 'node', e => onSelect(e.target.data()))
       cyRef.current = cy
-      // 首次渲染时延迟 resize + fit，确保容器有尺寸
-      setTimeout(() => { if (cyRef.current) { cyRef.current.resize(); cyRef.current.fit(null, 30) } }, 200)
-      setTimeout(() => { if (cyRef.current) { cyRef.current.resize(); cyRef.current.fit(null, 30) } }, 500)
+      // 用 ResizeObserver 监听容器尺寸变化，首次有尺寸时 fit
+      if (ref.current) {
+        let fitted = false
+        ro = new ResizeObserver(() => {
+          if (cyRef.current && !fitted) { cyRef.current.resize(); cyRef.current.fit(null, 15); fitted = true }
+        })
+        ro.observe(ref.current)
+      }
+      // 多次延迟 fit 确保渲染
+      setTimeout(() => { if (cyRef.current) { cyRef.current.resize(); cyRef.current.fit(null, 15) } }, 100)
+      setTimeout(() => { if (cyRef.current) { cyRef.current.resize(); cyRef.current.fit(null, 15) } }, 300)
+      setTimeout(() => { if (cyRef.current) { cyRef.current.resize(); cyRef.current.fit(null, 15) } }, 800)
     })
-    return () => { if (cy) cy.destroy() }
+    return () => { if (cy) cy.destroy(); if (ro) ro.disconnect() }
   }, [theme])
 
   useEffect(() => {
@@ -460,7 +505,7 @@ function NetworkPage({onSelect, fsKey, setFsKey}) {
     <main className="main" style={{display: 'flex', flexDirection: 'column'}}>
       <div className="pagehead"><h2>{t.topologyNetwork}</h2><p className="muted">{t.networkDesc}</p></div>
       <ChartFrame title={t.topologyNetwork} chartKey={KEY} fsKey={fsKey} setFsKey={setFsKey} icon={GitBranch} style={{flex: 1, minHeight: 400}}>
-        <div ref={ref} style={{width: '100%', height: '100%'}}/>
+        <div ref={ref} style={{width: '100%', height: '100%', position: 'absolute', inset: 0}}/>
       </ChartFrame>
     </main>
   )
@@ -488,7 +533,7 @@ function ChartsPage({roundKey, fsKey, setFsKey}) {
     })
   }, [])
   useEffect(() => { get(`/api/metrics/top?limit=50${roundKey ? '&round_key=' + roundKey : ''}`).then(setTop) }, [roundKey])
-  useEffect(() => { get('/api/graph/lineage?min_score=0.94&limit=250').then(setGraph) }, [])
+  useEffect(() => { get('/api/graph/lineage?min_score=0.85&limit=1000').then(setGraph) }, [])
 
   const boxTraces = useMemo(() => scatter.length ? [{
     x: scatter.map(d => d.source_round), y: scatter.map(d => num(d.score)),
