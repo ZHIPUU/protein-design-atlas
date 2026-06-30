@@ -23,6 +23,81 @@ const pick = (o, ...keys) => { for (const k of keys) { if (o?.[k] != null && o[k
 const ThemeCtx = createContext('dark')
 const useTheme = () => useContext(ThemeCtx)
 
+// 国际化翻译字典
+const I18N = {
+  en: {
+    // 导航
+    navDashboard: 'Dashboard', navSequences: 'Sequences', navNetwork: 'Network', navCharts: 'Charts', navDocs: 'Docs',
+    // 品牌
+    brand: 'Protein Design Atlas', brandSub: 'GFP evolution cockpit',
+    // 轮次
+    rounds: 'Rounds', allRounds: 'All rounds',
+    // 顶栏
+    toggleTheme: 'Toggle theme', toggleLang: '中', switchLang: 'Switch language',
+    // 右栏
+    inspector: 'Inspector', inspectorEmpty: 'Click a sequence, network node or document to inspect.',
+    apiExamples: 'API examples', currentBest: 'Current Best',
+    parent: 'Parent', docTitle: 'Title', path: 'Path', labelField: 'Label',
+    // 仪表盘
+    gfpLineage: 'GFP Design Lineage', evolutionCockpit: 'Evolution Cockpit',
+    dashboardDesc: 'Tracking every ProteinMPNN / ESMFold decision across rounds, sequences and metrics.',
+    metricSequences: 'Sequences', metricMetrics: 'Metrics', metricArtifacts: 'Artifacts', metricRounds: 'Rounds',
+    scoreTrend: 'Score Trend', ptmChromo: 'pTM × Chromo',
+    bestByRound: 'Best score by round', ptmVsChromo: 'pTM × Chromophore pLDDT',
+    // 序列页
+    sequenceVault: 'Sequence Vault', minScore: 'min score, e.g. 0.94',
+    thRound: 'Round', thScore: 'Score', thPtm: 'pTM', thPlddt: 'pLDDT', thChromo: 'Chromo', thLength: 'Length', thSequence: 'Sequence',
+    // 网络页
+    topologyNetwork: 'Topology Network', networkDesc: 'Lineage of parent tags, screening rounds and top candidates.',
+    // 图表页
+    chartsTitle: 'Charts', scoreDist: 'Score distribution by round', top6Candidates: 'Top 6 candidates',
+    parentContrib: 'Parent contribution', parentContribFull: 'Parent contribution (children count)',
+    // 文档页
+    selectDoc: 'Select a document to view its content.',
+    // 全屏
+    exitFullscreen: 'Exit fullscreen', fullscreen: 'Fullscreen',
+    // 轴标题
+    axisScore: 'Score', axisPtm: 'pTM', axisChromoPlddt: 'Chromo pLDDT',
+  },
+  zh: {
+    // 导航
+    navDashboard: '总览', navSequences: '序列库', navNetwork: '谱系网络', navCharts: '图表', navDocs: '文档',
+    // 品牌
+    brand: '蛋白设计图鉴', brandSub: 'GFP 进化驾驶舱',
+    // 轮次
+    rounds: '轮次', allRounds: '全部轮次',
+    // 顶栏
+    toggleTheme: '切换主题', toggleLang: 'EN', switchLang: '切换语言',
+    // 右栏
+    inspector: '检查器', inspectorEmpty: '点击序列、网络节点或文档以查看详情。',
+    apiExamples: 'API 示例', currentBest: '当前最佳',
+    parent: '亲本', docTitle: '标题', path: '路径', labelField: '标签',
+    // 仪表盘
+    gfpLineage: 'GFP 设计谱系', evolutionCockpit: '进化驾驶舱',
+    dashboardDesc: '追踪每一轮 ProteinMPNN / ESMFold 决策，覆盖轮次、序列与指标。',
+    metricSequences: '序列数', metricMetrics: '指标数', metricArtifacts: '产物数', metricRounds: '轮次数',
+    scoreTrend: '分数趋势', ptmChromo: 'pTM × 生色团',
+    bestByRound: '各轮次最佳分数', ptmVsChromo: 'pTM × 生色团 pLDDT',
+    // 序列页
+    sequenceVault: '序列库', minScore: '最低分数，如 0.94',
+    thRound: '轮次', thScore: '分数', thPtm: 'pTM', thPlddt: 'pLDDT', thChromo: '生色团', thLength: '长度', thSequence: '序列',
+    // 网络页
+    topologyNetwork: '谱系网络', networkDesc: '亲本标签、筛选轮次与顶级候选的谱系关系。',
+    // 图表页
+    chartsTitle: '图表', scoreDist: '各轮次分数分布', top6Candidates: '前 6 候选',
+    parentContrib: '亲本贡献', parentContribFull: '亲本贡献（子代数量）',
+    // 文档页
+    selectDoc: '选择文档查看内容。',
+    // 全屏
+    exitFullscreen: '退出全屏', fullscreen: '全屏',
+    // 轴标题
+    axisScore: '分数', axisPtm: 'pTM', axisChromoPlddt: '生色团 pLDDT',
+  }
+}
+
+const I18nCtx = createContext(I18N.zh)
+const useI18n = () => useContext(I18nCtx)
+
 function normCandidate(c, i) {
   const score = num(pick(c, 'score', 'best_score'))
   const ptm = num(pick(c, 'ptm', 'best_ptm'))
@@ -98,17 +173,18 @@ const PlotlyChart = React.memo(function PlotlyChart({traces, layout, fsKey}) {
       return () => clearTimeout(t)
     }
   }, [fsKey])
-  return <div className="plot" ref={ref}/>
+  return <div className="plot" ref={ref} style={{width: '100%', height: '100%', minHeight: 300}}/>
 })
 
 /* ---------- Fullscreen-capable chart frame ---------- */
 function ChartFrame({title, chartKey, fsKey, setFsKey, icon: Icon, style, children}) {
+  const t = useI18n()
   const isFs = fsKey === chartKey
   return (
     <div className={`chart-frame${isFs ? ' fs' : ''}`} style={(!isFs && style) ? style : undefined}>
       <div className="chart-head">
         <span className="t">{Icon && <Icon size={15}/>}{title}</span>
-        <button onClick={() => setFsKey(isFs ? null : chartKey)} title={isFs ? 'Exit fullscreen' : 'Fullscreen'}>
+        <button onClick={() => setFsKey(isFs ? null : chartKey)} title={isFs ? t.exitFullscreen : t.fullscreen}>
           {isFs ? <Minimize2 size={16}/> : <Maximize2 size={16}/>}
         </button>
       </div>
@@ -122,39 +198,44 @@ function Metric({label, value, tone = 'gold'}) {
 }
 
 /* ---------- Top bar with theme toggle ---------- */
-function TopBar({theme, setTheme, page, roundKey}) {
-  const titles = {dashboard: 'Dashboard', sequences: 'Sequences', network: 'Network', charts: 'Charts', docs: 'Docs'}
+function TopBar({theme, setTheme, lang, setLang, page, roundKey}) {
+  const t = useI18n()
+  const titles = {dashboard: t.navDashboard, sequences: t.navSequences, network: t.navNetwork, charts: t.navCharts, docs: t.navDocs}
   return (
     <header className="topbar">
       <div className="tb-left">
         <b className="tb-title">{titles[page]}</b>
         {roundKey && <span className="tb-round">{roundKey}</span>}
       </div>
-      <button onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} title="Toggle theme">
-        {theme === 'dark' ? <Sun size={18}/> : <Moon size={18}/>}
-      </button>
+      <div style={{display: 'flex', gap: 8}}>
+        <button onClick={() => setLang(lang === 'zh' ? 'en' : 'zh')} title={t.switchLang}>{t.toggleLang}</button>
+        <button onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} title={t.toggleTheme}>
+          {theme === 'dark' ? <Sun size={18}/> : <Moon size={18}/>}
+        </button>
+      </div>
     </header>
   )
 }
 
 /* ---------- Left navigation ---------- */
 function LeftNav({rounds, selectedRound, setSelectedRound, page, setPage}) {
+  const t = useI18n()
   const items = [
-    ['dashboard', 'Dashboard', LayoutDashboard],
-    ['sequences', 'Sequences', Database],
-    ['network', 'Network', NetIcon],
-    ['charts', 'Charts', BarChart3],
-    ['docs', 'Docs', FileText]
+    ['dashboard', t.navDashboard, LayoutDashboard],
+    ['sequences', t.navSequences, Database],
+    ['network', t.navNetwork, NetIcon],
+    ['charts', t.navCharts, BarChart3],
+    ['docs', t.navDocs, FileText]
   ]
   return (
     <aside className="left">
-      <div className="brand"><FlaskConical size={28}/><div><b>Protein Design Atlas</b><span>GFP evolution cockpit</span></div></div>
+      <div className="brand"><FlaskConical size={28}/><div><b>{t.brand}</b><span>{t.brandSub}</span></div></div>
       <nav>{items.map(([id, label, Icon]) =>
         <button key={id} onClick={() => setPage(id)} className={page === id ? 'active' : ''}><Icon size={18}/>{label}</button>
       )}</nav>
       <div className="round-picker">
-        <h3>Rounds</h3>
-        <button className={!selectedRound ? 'selected' : ''} onClick={() => setSelectedRound('')}>All rounds</button>
+        <h3>{t.rounds}</h3>
+        <button className={!selectedRound ? 'selected' : ''} onClick={() => setSelectedRound('')}>{t.allRounds}</button>
         {rounds.map(r =>
           <button key={r.round_key} className={selectedRound === r.round_key ? 'selected' : ''} onClick={() => setSelectedRound(r.round_key)}>
             <span>{r.round_key}</span><em>{r.best_score ? Number(r.best_score).toFixed(4) : '—'}</em>
@@ -165,16 +246,57 @@ function LeftNav({rounds, selectedRound, setSelectedRound, page, setPage}) {
   )
 }
 
+/* ---------- 右侧检查器键值对组件 ---------- */
+function Kv({k, v}) {
+  return <div className="kv"><span className="k">{k}</span><span className="v">{v == null || v === '' ? '—' : v}</span></div>
+}
+
 /* ---------- Right inspector ---------- */
 function RightPanel({selected, stats}) {
+  const t = useI18n()
+  let detail = null
+  if (selected) {
+    if (selected.sequence != null) {
+      // 序列类型
+      const seq = String(selected.sequence)
+      detail = <div className="inspector-detail">
+        <Kv k={t.thRound} v={selected.source_round || selected.round_key}/>
+        <Kv k={t.thScore} v={num(pick(selected, 'score', 'best_score')).toFixed(4)}/>
+        <Kv k={t.thPtm} v={num(pick(selected, 'ptm', 'best_ptm')).toFixed(4)}/>
+        <Kv k={t.thPlddt} v={num(pick(selected, 'plddt', 'best_plddt')).toFixed(3)}/>
+        <Kv k={t.thChromo} v={num(pick(selected, 'chromo', 'best_chromo')).toFixed(3)}/>
+        <Kv k={t.thLength} v={selected.length}/>
+        <Kv k={t.parent} v={selected.parent || selected.parent_tag}/>
+        <Kv k={t.thSequence} v={seq.length > 50 ? seq.slice(0, 50) + '...' : seq}/>
+      </div>
+    } else if (selected.title != null) {
+      // 文档类型
+      detail = <div className="inspector-detail">
+        <Kv k={t.docTitle} v={selected.title}/>
+        <Kv k={t.thRound} v={selected.round_key}/>
+        <Kv k={t.path} v={selected.path}/>
+      </div>
+    } else if (selected.label != null) {
+      // 网络节点类型
+      detail = <div className="inspector-detail">
+        <Kv k={t.labelField} v={selected.label}/>
+        <Kv k={t.thScore} v={num(pick(selected, 'score', 'best_score')).toFixed(4)}/>
+        <Kv k={t.thRound} v={selected.source_round || selected.round_key}/>
+        <Kv k={t.parent} v={selected.parent}/>
+      </div>
+    } else {
+      // 其他：键值对列表
+      detail = <div className="inspector-detail">
+        {Object.entries(selected).map(([k, v]) => <Kv key={k} k={k} v={String(v)}/>)}
+      </div>
+    }
+  }
   return (
     <aside className="right">
-      <div className="panel-title">Inspector</div>
-      {selected
-        ? <pre>{JSON.stringify(selected, null, 2)}</pre>
-        : <div className="empty">Click a sequence, network node or document to inspect.</div>}
+      <div className="panel-title">{t.inspector}</div>
+      {detail || <div className="empty">{t.inspectorEmpty}</div>}
       <div className="api-box">
-        <div>API examples</div>
+        <div>{t.apiExamples}</div>
         <code>GET /api/stats</code>
         <code>GET /api/sequences?min_score=0.94</code>
         <code>GET /api/metrics/top?limit=50</code>
@@ -182,7 +304,7 @@ function RightPanel({selected, stats}) {
       </div>
       {stats?.best && (
         <div className="best-card">
-          <b>Current Best</b>
+          <b>{t.currentBest}</b>
           <span>{num(stats.best.best_score).toFixed(4)}</span>
           <small>{stats.best.source_round}</small>
         </div>
@@ -194,6 +316,7 @@ function RightPanel({selected, stats}) {
 /* ---------- Dashboard ---------- */
 function Dashboard({stats, trend, scatter, fsKey, setFsKey}) {
   const theme = useTheme()
+  const t = useI18n()
 
   const trendTraces = useMemo(() => trend.length ? [{
     x: trend.map(d => d.round_key), y: trend.map(d => num(d.best_score)),
@@ -201,9 +324,9 @@ function Dashboard({stats, trend, scatter, fsKey, setFsKey}) {
     line: {color: theme === 'dark' ? '#d4af37' : '#9a7b1f', width: 3}, marker: {size: 9}
   }] : [], [trend, theme])
   const trendLayout = useMemo(() => {
-    const l = plotLayout('Best score by round', theme)
-    return {...l, yaxis: {...l.yaxis, title: 'Score'}}
-  }, [theme])
+    const l = plotLayout(t.bestByRound, theme)
+    return {...l, yaxis: {...l.yaxis, title: t.axisScore}}
+  }, [theme, t])
 
   const scatterTraces = useMemo(() => scatter.length ? [{
     x: scatter.map(d => num(d.ptm)), y: scatter.map(d => num(d.chromo)),
@@ -215,28 +338,28 @@ function Dashboard({stats, trend, scatter, fsKey, setFsKey}) {
     }
   }] : [], [scatter])
   const scatterLayout = useMemo(() => {
-    const l = plotLayout('pTM × Chromophore pLDDT', theme)
-    return {...l, xaxis: {...l.xaxis, title: 'pTM', range: [0, 1]}, yaxis: {...l.yaxis, title: 'Chromo pLDDT', range: [0, 1]}}
-  }, [theme])
+    const l = plotLayout(t.ptmVsChromo, theme)
+    return {...l, xaxis: {...l.xaxis, title: t.axisPtm, range: [0, 1]}, yaxis: {...l.yaxis, title: t.axisChromoPlddt, range: [0, 1]}}
+  }, [theme, t])
 
   return (
     <main className="main">
       <section className="hero">
-        <span className="eyebrow">GFP Design Lineage</span>
-        <h1>Evolution Cockpit</h1>
-        <p>Tracking every ProteinMPNN / ESMFold decision across rounds, sequences and metrics.</p>
+        <span className="eyebrow">{t.gfpLineage}</span>
+        <h1>{t.evolutionCockpit}</h1>
+        <p>{t.dashboardDesc}</p>
       </section>
       <div className="metrics">
-        <Metric label="Sequences" value={stats?.sequences?.toLocaleString?.()}/>
-        <Metric label="Metrics" value={stats?.metrics?.toLocaleString?.()} tone="green"/>
-        <Metric label="Artifacts" value={stats?.artifacts}/>
-        <Metric label="Rounds" value={stats?.rounds} tone="blue"/>
+        <Metric label={t.metricSequences} value={stats?.sequences?.toLocaleString?.()}/>
+        <Metric label={t.metricMetrics} value={stats?.metrics?.toLocaleString?.()} tone="green"/>
+        <Metric label={t.metricArtifacts} value={stats?.artifacts}/>
+        <Metric label={t.metricRounds} value={stats?.rounds} tone="blue"/>
       </div>
       <div className="grid2">
-        <ChartFrame title="Score Trend" chartKey="trend" fsKey={fsKey} setFsKey={setFsKey} icon={TrendingUp}>
+        <ChartFrame title={t.scoreTrend} chartKey="trend" fsKey={fsKey} setFsKey={setFsKey} icon={TrendingUp}>
           <PlotlyChart traces={trendTraces} layout={trendLayout} fsKey={fsKey}/>
         </ChartFrame>
-        <ChartFrame title="pTM × Chromo" chartKey="scatter" fsKey={fsKey} setFsKey={setFsKey} icon={ScatterChart}>
+        <ChartFrame title={t.ptmChromo} chartKey="scatter" fsKey={fsKey} setFsKey={setFsKey} icon={ScatterChart}>
           <PlotlyChart traces={scatterTraces} layout={scatterLayout} fsKey={fsKey}/>
         </ChartFrame>
       </div>
@@ -246,6 +369,7 @@ function Dashboard({stats, trend, scatter, fsKey, setFsKey}) {
 
 /* ---------- Sequences ---------- */
 function Sequences({roundKey, onSelect}) {
+  const t = useI18n()
   const [rows, setRows] = useState([])
   const [q, setQ] = useState('')
   useEffect(() => {
@@ -254,11 +378,11 @@ function Sequences({roundKey, onSelect}) {
   return (
     <main className="main">
       <div className="pagehead">
-        <h2>Sequence Vault</h2>
-        <div className="search"><Search size={16}/><input placeholder="min score, e.g. 0.94" value={q} onChange={e => setQ(e.target.value)}/></div>
+        <h2>{t.sequenceVault}</h2>
+        <div className="search"><Search size={16}/><input placeholder={t.minScore} value={q} onChange={e => setQ(e.target.value)}/></div>
       </div>
       <table>
-        <thead><tr><th>Round</th><th>Score</th><th>pTM</th><th>pLDDT</th><th>Chromo</th><th>Length</th><th>Sequence</th></tr></thead>
+        <thead><tr><th>{t.thRound}</th><th>{t.thScore}</th><th>{t.thPtm}</th><th>{t.thPlddt}</th><th>{t.thChromo}</th><th>{t.thLength}</th><th>{t.thSequence}</th></tr></thead>
         <tbody>{rows.map(r => (
           <tr key={r.id} onClick={() => { onSelect(r); get('/api/sequences/' + r.id).then(onSelect) }}>
             <td>{r.source_round}</td>
@@ -280,6 +404,7 @@ function NetworkPage({onSelect, fsKey, setFsKey}) {
   const ref = useRef()
   const cyRef = useRef(null)
   const theme = useTheme()
+  const t = useI18n()
   const KEY = 'network'
 
   useEffect(() => {
@@ -316,8 +441,8 @@ function NetworkPage({onSelect, fsKey, setFsKey}) {
 
   return (
     <main className="main" style={{display: 'flex', flexDirection: 'column'}}>
-      <div className="pagehead"><h2>Topology Network</h2><p className="muted">Lineage of parent tags, screening rounds and top candidates.</p></div>
-      <ChartFrame title="Topology Network" chartKey={KEY} fsKey={fsKey} setFsKey={setFsKey} icon={GitBranch} style={{flex: 1, minHeight: 400}}>
+      <div className="pagehead"><h2>{t.topologyNetwork}</h2><p className="muted">{t.networkDesc}</p></div>
+      <ChartFrame title={t.topologyNetwork} chartKey={KEY} fsKey={fsKey} setFsKey={setFsKey} icon={GitBranch} style={{flex: 1, minHeight: 400}}>
         <div ref={ref} style={{width: '100%', height: '100%'}}/>
       </ChartFrame>
     </main>
@@ -327,6 +452,7 @@ function NetworkPage({onSelect, fsKey, setFsKey}) {
 /* ---------- Charts (box / radar / bar) ---------- */
 function ChartsPage({roundKey, fsKey, setFsKey}) {
   const theme = useTheme()
+  const t = useI18n()
   const [scatter, setScatter] = useState([])
   const [top, setTop] = useState([])
   const [graph, setGraph] = useState({nodes: [], edges: []})
@@ -341,7 +467,7 @@ function ChartsPage({roundKey, fsKey, setFsKey}) {
     marker: {color: theme === 'dark' ? '#d4af37' : '#9a7b1f'},
     line: {color: theme === 'dark' ? '#69c18d' : '#3d8a5a'}
   }] : [], [scatter, theme])
-  const boxLayout = useMemo(() => plotLayout('Score distribution by round', theme), [theme])
+  const boxLayout = useMemo(() => plotLayout(t.scoreDist, theme), [theme, t])
 
   const cand = useMemo(() => (top || []).slice(0, 6).map(normCandidate), [top])
   const radarTraces = useMemo(() => cand.map((c, idx) => ({
@@ -351,11 +477,11 @@ function ChartsPage({roundKey, fsKey, setFsKey}) {
     name: c.label, fill: 'toself', line: {color: COLORS[idx % COLORS.length]}
   })), [cand])
   const radarLayout = useMemo(() => {
-    const l = plotLayout('Top 6 candidates', theme)
+    const l = plotLayout(t.top6Candidates, theme)
     const g = theme === 'dark' ? '#2b332f' : '#e3dfd2'
     const ax = theme === 'dark' ? '#d9d0bd' : '#4a463c'
     return {...l, polar: {radialaxis: {range: [0, 1], gridcolor: g, color: ax}, angularaxis: {gridcolor: g, color: ax}}}
-  }, [theme])
+  }, [theme, t])
 
   const bars = useMemo(() => {
     const counts = {}
@@ -369,28 +495,94 @@ function ChartsPage({roundKey, fsKey, setFsKey}) {
     x: bars.map(b => b.label), y: bars.map(b => b.count), type: 'bar',
     marker: {color: bars.map((_, i) => COLORS[i % COLORS.length])}
   }] : [], [bars])
-  const barLayout = useMemo(() => plotLayout('Parent contribution (children count)', theme), [theme])
+  const barLayout = useMemo(() => plotLayout(t.parentContribFull, theme), [theme, t])
 
   return (
     <main className="main">
-      <div className="pagehead"><h2>Charts</h2></div>
+      <div className="pagehead"><h2>{t.chartsTitle}</h2></div>
       <div className="grid2" style={{marginBottom: 18}}>
-        <ChartFrame title="Score distribution by round" chartKey="box" fsKey={fsKey} setFsKey={setFsKey} icon={Box}>
+        <ChartFrame title={t.scoreDist} chartKey="box" fsKey={fsKey} setFsKey={setFsKey} icon={Box}>
           <PlotlyChart traces={boxTraces} layout={boxLayout} fsKey={fsKey}/>
         </ChartFrame>
-        <ChartFrame title="Top 6 candidates" chartKey="radar" fsKey={fsKey} setFsKey={setFsKey} icon={Radar}>
+        <ChartFrame title={t.top6Candidates} chartKey="radar" fsKey={fsKey} setFsKey={setFsKey} icon={Radar}>
           <PlotlyChart traces={radarTraces} layout={radarLayout} fsKey={fsKey}/>
         </ChartFrame>
       </div>
-      <ChartFrame title="Parent contribution" chartKey="bar" fsKey={fsKey} setFsKey={setFsKey} icon={BarChart3}>
+      <ChartFrame title={t.parentContrib} chartKey="bar" fsKey={fsKey} setFsKey={setFsKey} icon={BarChart3}>
         <PlotlyChart traces={barTraces} layout={barLayout} fsKey={fsKey}/>
       </ChartFrame>
     </main>
   )
 }
 
+/* ---------- 简易 Markdown 渲染器 ---------- */
+// 支持：标题/粗体/斜体/行内代码/代码块/列表/表格/引用/分隔线/链接，含 XSS 转义
+function renderMarkdown(text) {
+  if (!text) return ''
+  // 先转义 HTML 特殊字符，防止 XSS
+  const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+  let src = esc(text)
+  // 代码块 ```...```，先抽出避免被行级解析破坏
+  const blocks = []
+  src = src.replace(/```([\s\S]*?)```/g, (m, code) => {
+    blocks.push('<pre><code>' + code.replace(/^\n/, '').replace(/\n$/, '') + '</code></pre>')
+    return '\u0000B' + (blocks.length - 1) + '\u0000'
+  })
+  // 行内格式：代码/粗体/斜体/链接
+  const inline = (s) => s
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
+  const lines = src.split('\n')
+  const out = []
+  let inUl = false, inOl = false, inQuote = false, para = [], tableRows = []
+  const flushPara = () => { if (para.length) { out.push('<p>' + inline(para.join(' ')) + '</p>'); para = [] } }
+  const flushLists = () => { if (inUl) { out.push('</ul>'); inUl = false } if (inOl) { out.push('</ol>'); inOl = false } }
+  const flushTable = () => {
+    if (!tableRows.length) return
+    const rows = tableRows.map(r => r.replace(/^\|/, '').replace(/\|$/, '').split('|').map(c => c.trim()))
+    let t = '<table>'
+    rows.forEach((cells, i) => { const tag = i === 0 ? 'th' : 'td'; t += '<tr>' + cells.map(c => '<' + tag + '>' + inline(c) + '</' + tag + '>').join('') + '</tr>' })
+    t += '</table>'; out.push(t); tableRows = []
+  }
+  const flushAll = () => { flushPara(); flushLists(); if (inQuote) { out.push('</blockquote>'); inQuote = false } flushTable() }
+  for (const line of lines) {
+    // 代码块占位还原
+    if (/^\u0000B\d+\u0000$/.test(line.trim())) { flushAll(); out.push(line.trim()); continue }
+    // 分隔线
+    if (/^---+\s*$/.test(line)) { flushAll(); out.push('<hr/>'); continue }
+    let m
+    // 标题
+    if ((m = line.match(/^###\s+(.*)$/))) { flushAll(); out.push('<h3>' + inline(m[1]) + '</h3>'); continue }
+    if ((m = line.match(/^##\s+(.*)$/))) { flushAll(); out.push('<h2>' + inline(m[1]) + '</h2>'); continue }
+    if ((m = line.match(/^#\s+(.*)$/))) { flushAll(); out.push('<h1>' + inline(m[1]) + '</h1>'); continue }
+    // 引用（转义后 > 变为 &gt;）
+    if ((m = line.match(/^&gt;\s?(.*)$/))) { flushLists(); flushTable(); flushPara(); if (!inQuote) { inQuote = true; out.push('<blockquote>') } out.push('<p>' + inline(m[1]) + '</p>'); continue }
+    // 表格
+    if (line.includes('|') && line.trim().startsWith('|')) { flushLists(); flushPara(); if (inQuote) { out.push('</blockquote>'); inQuote = false } if (/^\|[\s:|-]+\|\s*$/.test(line.trim())) continue; tableRows.push(line.trim()); continue }
+    flushTable()
+    if (inQuote) { out.push('</blockquote>'); inQuote = false }
+    // 无序列表
+    if ((m = line.match(/^[-*]\s+(.*)$/))) { flushPara(); if (inOl) { out.push('</ol>'); inOl = false } if (!inUl) { out.push('<ul>'); inUl = true } out.push('<li>' + inline(m[1]) + '</li>'); continue }
+    // 有序列表
+    if ((m = line.match(/^\d+\.\s+(.*)$/))) { flushPara(); if (inUl) { out.push('</ul>'); inUl = false } if (!inOl) { out.push('<ol>'); inOl = true } out.push('<li>' + inline(m[1]) + '</li>'); continue }
+    // 空行分段
+    if (line.trim() === '') { flushAll(); continue }
+    // 普通段落行，累积到段落
+    flushLists()
+    para.push(line)
+  }
+  flushAll()
+  let result = out.join('\n')
+  // 还原代码块
+  result = result.replace(/\u0000B(\d+)\u0000/g, (m, i) => blocks[Number(i)])
+  return result
+}
+
 /* ---------- Docs ---------- */
 function DocsPage({roundKey, onSelect}) {
+  const t = useI18n()
   const [docs, setDocs] = useState([])
   const [body, setBody] = useState('')
   const [cur, setCur] = useState(null)
@@ -405,7 +597,7 @@ function DocsPage({roundKey, onSelect}) {
           </button>
         ))}
       </div>
-      <article className="markdown"><pre>{body || 'Select a document to view its content.'}</pre></article>
+      <article className="markdown" dangerouslySetInnerHTML={{__html: body ? renderMarkdown(body) : '<p class="muted">' + t.selectDoc + '</p>'}}/>
     </main>
   )
 }
@@ -413,6 +605,7 @@ function DocsPage({roundKey, onSelect}) {
 /* ---------- App ---------- */
 function App() {
   const [theme, setTheme] = useState('dark')
+  const [lang, setLang] = useState('zh')
   const [rounds, setRounds] = useState([])
   const [stats, setStats] = useState(null)
   const [trend, setTrend] = useState([])
@@ -438,20 +631,22 @@ function App() {
 
   return (
     <ThemeCtx.Provider value={theme}>
-      <div className="app">
-        <LeftNav rounds={rounds} selectedRound={roundKey} setSelectedRound={setRoundKey} page={page} setPage={setPage}/>
-        <div className="main-col">
-          <TopBar theme={theme} setTheme={setTheme} page={page} roundKey={roundKey}/>
-          <div className="main" style={{overflow: 'auto'}}>
-            {page === 'dashboard' && <Dashboard stats={stats} trend={trend} scatter={scatter} fsKey={fsKey} setFsKey={setFsKey}/>}
-            {page === 'sequences' && <Sequences roundKey={roundKey} onSelect={setSelected}/>}
-            {page === 'network' && <NetworkPage onSelect={setSelected} fsKey={fsKey} setFsKey={setFsKey}/>}
-            {page === 'charts' && <ChartsPage roundKey={roundKey} fsKey={fsKey} setFsKey={setFsKey}/>}
-            {page === 'docs' && <DocsPage roundKey={roundKey} onSelect={setSelected}/>}
+      <I18nCtx.Provider value={I18N[lang]}>
+        <div className="app">
+          <LeftNav rounds={rounds} selectedRound={roundKey} setSelectedRound={setRoundKey} page={page} setPage={setPage}/>
+          <div className="main-col">
+            <TopBar theme={theme} setTheme={setTheme} lang={lang} setLang={setLang} page={page} roundKey={roundKey}/>
+            <div className="main" style={{overflow: 'auto'}}>
+              {page === 'dashboard' && <Dashboard stats={stats} trend={trend} scatter={scatter} fsKey={fsKey} setFsKey={setFsKey}/>}
+              {page === 'sequences' && <Sequences roundKey={roundKey} onSelect={setSelected}/>}
+              {page === 'network' && <NetworkPage onSelect={setSelected} fsKey={fsKey} setFsKey={setFsKey}/>}
+              {page === 'charts' && <ChartsPage roundKey={roundKey} fsKey={fsKey} setFsKey={setFsKey}/>}
+              {page === 'docs' && <DocsPage roundKey={roundKey} onSelect={setSelected}/>}
+            </div>
           </div>
+          <RightPanel selected={selected} stats={stats}/>
         </div>
-        <RightPanel selected={selected} stats={stats}/>
-      </div>
+      </I18nCtx.Provider>
     </ThemeCtx.Provider>
   )
 }

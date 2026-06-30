@@ -5,13 +5,11 @@ services:
       dockerfile: backend/Dockerfile
     environment:
       ATLAS_DB: /app/data/design.db
-      ATLAS_SOURCE_ROOTS: /sources/workspace;/sources/project
+      ATLAS_SOURCE_ROOTS: /sources
       ATLAS_ARTIFACT_DIR: /app/artifacts
     volumes:
       - ./data:/app/data
       - ./artifacts:/app/artifacts
-      - D:/workspace:/sources/workspace:ro
-      - D:/生信/2026Protein Design:/sources/project:ro
     ports:
       - "${API_PORT:-18000}:8000"
     restart: unless-stopped
@@ -20,8 +18,6 @@ services:
     build:
       context: .
       dockerfile: frontend/Dockerfile
-    environment:
-      VITE_API_URL: http://localhost:${API_PORT:-18000}
     ports:
       - "${WEB_PORT:-18082}:80"
     depends_on:
