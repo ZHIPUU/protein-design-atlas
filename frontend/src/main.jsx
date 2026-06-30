@@ -328,19 +328,29 @@ function Dashboard({stats, trend, scatter, fsKey, setFsKey}) {
     return {...l, yaxis: {...l.yaxis, title: t.axisScore}}
   }, [theme, t])
 
-  const scatterTraces = useMemo(() => scatter.length ? [{
-    x: scatter.map(d => num(d.ptm)), y: scatter.map(d => num(d.chromo)),
-    text: scatter.map(d => `${d.source_round}<br>${num(d.score).toFixed(4)}`),
-    mode: 'markers', type: 'scatter',
-    marker: {
-      size: scatter.map(d => Math.max(5, num(d.score) * 12)),
-      color: scatter.map(d => num(d.score)), colorscale: 'Viridis', showscale: true
-    }
-  }] : [], [scatter])
+  const scatterTraces = useMemo(() => {
+    // 排除 R6 异常值（pLDDT 尺度异常）
+    const filtered = scatter.filter(d => d.source_round !== 'R6' && num(d.ptm) > 0 && num(d.chromo) > 0)
+    return filtered.length ? [{
+      x: filtered.map(d => num(d.ptm)), y: filtered.map(d => num(d.chromo)),
+      text: filtered.map(d => `${d.source_round}<br>${num(d.score).toFixed(4)}`),
+      mode: 'markers', type: 'scatter',
+      marker: {
+        size: filtered.map(d => Math.max(5, num(d.score) * 12)),
+        color: filtered.map(d => num(d.score)), colorscale: 'Viridis', showscale: true
+      }
+    }] : []
+  }, [scatter])
   const scatterLayout = useMemo(() => {
     const l = plotLayout(t.ptmVsChromo, theme)
-    return {...l, xaxis: {...l.xaxis, title: t.axisPtm, range: [0, 1]}, yaxis: {...l.yaxis, title: t.axisChromoPlddt, range: [0, 1]}}
-  }, [theme, t])
+    // 自适应范围，不硬编码 [0,1]
+    const pts = scatter.filter(d => d.source_round !== 'R6' && num(d.ptm) > 0 && num(d.chromo) > 0)
+    if (!pts.length) return l
+    const xs = pts.map(d => num(d.ptm)), ys = pts.map(d => num(d.chromo))
+    const xmin = Math.min(...xs) - 0.02, xmax = Math.max(...xs) + 0.02
+    const ymin = Math.min(...ys) - 0.02, ymax = Math.max(...ys) + 0.02
+    return {...l, xaxis: {...l.xaxis, title: t.axisPtm, range: [xmin, xmax]}, yaxis: {...l.yaxis, title: t.axisChromoPlddt, range: [ymin, ymax]}}
+  }, [theme, t, scatter])
 
   return (
     <main className="main">
@@ -430,6 +440,9 @@ function NetworkPage({onSelect, fsKey, setFsKey}) {
       })
       cy.on('tap', 'node', e => onSelect(e.target.data()))
       cyRef.current = cy
+      // 首次渲染时延迟 resize + fit，确保容器有尺寸
+      setTimeout(() => { if (cyRef.current) { cyRef.current.resize(); cyRef.current.fit(null, 30) } }, 200)
+      setTimeout(() => { if (cyRef.current) { cyRef.current.resize(); cyRef.current.fit(null, 30) } }, 500)
     })
     return () => { if (cy) cy.destroy() }
   }, [theme])
