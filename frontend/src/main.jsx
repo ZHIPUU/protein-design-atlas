@@ -424,25 +424,36 @@ function NetworkPage({onSelect, fsKey, setFsKey}) {
   useEffect(() => {
     let cy
     let ro
-    get('/api/graph/lineage?min_score=0.85&limit=1000').then(g => {
+    get('/api/graph/lineage?min_score=0.0&limit=800&per_round=12').then(g => {
       if (!ref.current) return
-      // 每轮均匀采样节点，避免 R25 占满
-      const nodesByRound = {}
-      ;(g.nodes || []).forEach(n => {
-        const r = n.data.source_round || n.data.label || 'other'
-        ;(nodesByRound[r] = nodesByRound[r] || []).push(n)
+      // 按轮次分层布局，确保 R2-R27 都能显示
+      const inputNodes = g.nodes || []
+      const inputEdges = g.edges || []
+      const order = [...new Set(inputNodes.map(n => n.data.source_round).filter(r => r && r !== 'parent_label'))]
+        .sort((a, b) => Number(String(a).slice(1)) - Number(String(b).slice(1)))
+      const roundIndex = Object.fromEntries(order.map((r, i) => [r, i]))
+      const byRound = {}
+      inputNodes.forEach(n => { (byRound[n.data.source_round || 'parent_label'] = byRound[n.data.source_round || 'parent_label'] || []).push(n) })
+      const nodes = inputNodes.map(n => {
+        const r = n.data.source_round || 'parent_label'
+        const arr = byRound[r] || []
+        const idx = arr.findIndex(x => x.data.id === n.data.id)
+        const x = r === 'parent_label' ? -180 : (roundIndex[r] ?? 0) * 180
+        const y = n.data.node_type === 'round_anchor' ? -260 : (idx - (arr.length - 1) / 2) * 54
+        return {
+          ...n,
+          position: {x, y},
+          data: {
+            ...n.data,
+            label: n.data.label && n.data.label.length === 16 && /^[0-9a-f]+$/.test(n.data.label)
+              ? `${n.data.source_round || ''} ${n.data.best_score ? Number(n.data.best_score).toFixed(4) : ''}`
+              : n.data.label
+          }
+        }
       })
-      const sampledNodes = []
-      Object.keys(nodesByRound).forEach(r => {
-        const arr = nodesByRound[r]
-        // 每轮最多 40 个节点
-        const step = Math.max(1, Math.ceil(arr.length / 40))
-        for (let i = 0; i < arr.length; i += step) sampledNodes.push(arr[i])
-      })
-      const nodeIds = new Set(sampledNodes.map(n => n.data.id))
-      // 去重边 + 只保留两端节点都在的边
+      const nodeIds = new Set(nodes.map(n => n.data.id))
       const seenEdges = new Set()
-      const edges = (g.edges || []).filter(e => {
+      const edges = inputEdges.filter(e => {
         const s = e.data.source, t = e.data.target
         if (!nodeIds.has(s) || !nodeIds.has(t)) return false
         const key = s + '->' + t
@@ -450,31 +461,30 @@ function NetworkPage({onSelect, fsKey, setFsKey}) {
         seenEdges.add(key)
         return true
       })
-      // 节点标签优化：序列 hash 节点显示 轮次+分数
-      const nodes = sampledNodes.map(n => ({
-        ...n,
-        data: {
-          ...n.data,
-          label: n.data.label && n.data.label.length === 16 && /^[0-9a-f]+$/.test(n.data.label)
-            ? `${n.data.source_round || ''} ${n.data.best_score ? Number(n.data.best_score).toFixed(4) : ''}`
-            : n.data.label
-        }
-      }))
       cy = cytoscape({
         container: ref.current,
         elements: [...nodes, ...edges],
-        layout: {name: 'fcose', animate: false, nodeSeparation: 80, idealEdgeLength: 120},
+        layout: {name: 'preset', fit: true, padding: 10},
         style: [
           {selector: 'node', style: {
-            'background-color': `mapData(best_score,0.93,0.948,${theme === 'dark' ? '#315b7c' : '#7aa8d8'},${theme === 'dark' ? '#e0b84a' : '#9a7b1f'})`,
+            'background-color': `mapData(best_score,0.0,0.948,${theme === 'dark' ? '#315b7c' : '#7aa8d8'},${theme === 'dark' ? '#e0b84a' : '#9a7b1f'})`,
             'label': 'data(label)', 'color': theme === 'dark' ? '#eee' : '#333', 'font-size': 8,
-            'width': 'mapData(best_score,0.93,0.948,20,48)', 'height': 'mapData(best_score,0.93,0.948,20,48)', 'text-wrap': 'wrap', 'text-valign': 'bottom', 'text-margin-y': 4
+            'width': 'mapData(best_score,0.0,0.948,16,44)', 'height': 'mapData(best_score,0.0,0.948,16,44)', 'text-wrap': 'wrap', 'text-valign': 'bottom', 'text-margin-y': 4
+          }},
+          {selector: 'node[node_type = "round_anchor"]', style: {
+            'shape': 'round-rectangle', 'width': 62, 'height': 28,
+            'background-color': theme === 'dark' ? '#243044' : '#e7eefb',
+            'border-width': 1, 'border-color': theme === 'dark' ? '#60a5fa' : '#3b82f6',
+            'font-size': 13, 'font-weight': 700, 'text-valign': 'center', 'text-halign': 'center', 'text-margin-y': 0
           }},
           {selector: 'edge', style: {
             'line-color': theme === 'dark' ? '#53645f' : '#c8c0ac',
             'target-arrow-color': theme === 'dark' ? '#8aa39b' : '#999',
             'target-arrow-shape': 'triangle', 'curve-style': 'bezier', 'opacity': 0.5,
             'arrow-scale': 1.2, 'width': 1.5
+          }},
+          {selector: 'edge[edge_type = "round_anchor"]', style: {
+            'line-style': 'dashed', 'line-color': theme === 'dark' ? '#334155' : '#cbd5e1', 'opacity': 0.22, 'target-arrow-shape': 'none', 'width': 1
           }}
         ]
       })
@@ -504,7 +514,7 @@ function NetworkPage({onSelect, fsKey, setFsKey}) {
   return (
     <main className="main" style={{display: 'flex', flexDirection: 'column'}}>
       <div className="pagehead"><h2>{t.topologyNetwork}</h2><p className="muted">{t.networkDesc}</p></div>
-      <ChartFrame title={t.topologyNetwork} chartKey={KEY} fsKey={fsKey} setFsKey={setFsKey} icon={GitBranch} style={{flex: 1, minHeight: 400}}>
+      <ChartFrame title={t.topologyNetwork} chartKey={KEY} fsKey={fsKey} setFsKey={setFsKey} icon={GitBranch} style={{flex: 1, minHeight: 720}}>
         <div ref={ref} style={{width: '100%', height: '100%', position: 'absolute', inset: 0}}/>
       </ChartFrame>
     </main>

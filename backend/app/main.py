@@ -97,18 +97,48 @@ def get_document(doc_id: int):
     return r[0] if r else {}
 
 @app.get("/api/graph/lineage")
-def lineage_graph(min_score: float = 0.90, limit: int = 500):
-    nodes = rows("SELECT id, source_round, best_score, best_ptm, best_plddt, best_chromo, length FROM sequences WHERE best_score>=? ORDER BY best_score DESC LIMIT ?", (min_score, limit))
+def lineage_graph(min_score: float = 0.0, limit: int = 800, per_round: int = Query(24, le=80)):
+    # Round-aware sampling: keep every round visible instead of letting late rounds dominate.
+    # Exclude invalid score outliers (>1) and null-score records; R6 round-level score is known to be abnormal.
+    nodes = rows("""
+        WITH ranked AS (
+            SELECT id, source_round, best_score, best_ptm, best_plddt, best_chromo, length,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY source_round
+                       ORDER BY best_score DESC NULLS LAST
+                   ) AS rn
+            FROM sequences
+            WHERE source_round IS NOT NULL
+              AND source_round != 'R6'
+              AND best_score IS NOT NULL
+              AND best_score BETWEEN ? AND 1
+        )
+        SELECT id, source_round, best_score, best_ptm, best_plddt, best_chromo, length
+        FROM ranked
+        WHERE rn <= ?
+        ORDER BY CAST(substr(source_round, 2) AS INTEGER), best_score DESC
+        LIMIT ?
+    """, (min_score, per_round, limit))
     ids = {n["id"] for n in nodes}
-    edges = rows("SELECT * FROM lineage_edges WHERE child_sequence_id IN (%s) LIMIT 2000" % ",".join("?" for _ in ids), tuple(ids)) if ids else []
+    edges = rows("SELECT * FROM lineage_edges WHERE child_sequence_id IN (%s) LIMIT 4000" % ",".join("?" for _ in ids), tuple(ids)) if ids else []
     cy_nodes = [{"data": {"id": n["id"], "label": f"{n.get('source_round') or ''}\n{(n.get('best_score') or 0):.4f}", **n}} for n in nodes]
+    # Add round anchor nodes so every round is visible even if it has no scored sequence.
+    round_rows = rows("SELECT round_key, round_number, best_score FROM rounds WHERE round_key != 'R6' ORDER BY round_number")
+    for r in round_rows:
+        cy_nodes.append({"data": {"id": f"round:{r['round_key']}", "label": r["round_key"], "source_round": r["round_key"], "round_number": r["round_number"], "best_score": r.get("best_score") or 0, "node_type": "round_anchor"}})
     cy_edges = [{"data": {"id": f"e{e['id']}", "source": e.get("parent_sequence_id") or e.get("parent_label") or "unknown", "target": e["child_sequence_id"], **e}} for e in edges]
-    # Add parent label placeholder nodes if needed
+    # Add faint round-anchor edges to place sequences near their round.
+    anchor_edges = []
+    for n in nodes:
+        if n.get("source_round"):
+            anchor_edges.append({"data": {"id": f"anchor:{n['id']}", "source": f"round:{n['source_round']}", "target": n["id"], "edge_type": "round_anchor", "weight": 0}})
+    cy_edges.extend(anchor_edges)
+    # Add parent label placeholder nodes if needed.
     existing = {n["data"]["id"] for n in cy_nodes}
     for e in cy_edges:
         src = e["data"]["source"]
         if src not in existing:
-            cy_nodes.append({"data": {"id": src, "label": str(src)[:32], "source_round": "parent_label", "best_score": 0}})
+            cy_nodes.append({"data": {"id": src, "label": str(src)[:32], "source_round": "parent_label", "best_score": 0, "node_type": "parent_label"}})
             existing.add(src)
     return {"nodes": cy_nodes, "edges": cy_edges}
 
